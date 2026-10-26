@@ -1,0 +1,19 @@
+# Environment variables (CRITICAL: Do not commit secrets)
+.env
+.env.*
+*.env
+!.env.example
+
+# Dependencies
+node_modules/
+
+# Build
+dist/
+
+# Logs
+logs/
+*.log
+
+# OS
+.DS_Store
+Thumbs.db
