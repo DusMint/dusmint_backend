@@ -21,7 +21,6 @@ Run each file in the Supabase SQL Editor in the exact numeric order below:
 | **11** | `011_delivery_tasks_and_fleet.sql` | Partner app rider assignment, bag pickup verification, delivery OTP | `003`, `007` |
 | **12** | `012_notifications_and_audit.sql` | Multi-channel dispatch log (FCM, MSG91 SMS, WhatsApp) & audit trail | *Base tables* |
 | **13** | `013_functions_and_triggers.sql` | Serviceability geo-checker, order code generator, trust tier evaluator | `001-012` |
-| **14** | `014_seed_test_data.sql` | *(Optional for dev)* Seeds Indore Vijay Nagar cluster, vendors, slots & items | `001-013` |
 
 ## How to Run in Supabase
 
@@ -29,5 +28,5 @@ Run each file in the Supabase SQL Editor in the exact numeric order below:
 2. Click on the **SQL Editor** tab (left sidebar).
 3. Create a new query.
 4. Copy and paste the contents of `001_extensions.sql` and click **Run**.
-5. Repeat for each file from `002` to `013` (and optionally `014` for test data).
-6. Verify under **Database -> Tables** that all 14 tables and enums are created properly.
+5. Repeat for each file from `002` to `013`.
+6. Verify under **Database -> Tables** that all tables and enums are created properly.
