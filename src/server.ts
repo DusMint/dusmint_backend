@@ -99,3 +99,6 @@ async function main() {
     fastify.log.error(err);
     process.exit(1);
   }
+}
+
+main();
