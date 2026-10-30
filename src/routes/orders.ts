@@ -227,3 +227,4 @@ async function getDefaultSlotId(clusterId: string): Promise<string> {
   const { data: slot } = await supabaseAdmin.from('slots').select('id').eq('cluster_id', clusterId).limit(1).single();
   return slot?.id || '30ed6f87-45ec-484c-9a49-d70166473aa2';
 }
+
