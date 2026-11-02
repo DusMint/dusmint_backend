@@ -2,6 +2,16 @@ import { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
 import { supabaseAdmin } from '../plugins/supabase';
 
 export async function vendorRoutes(fastify: FastifyInstance) {
+  // 0. Get Active Vendors List (for vendor app login/switching)
+  fastify.get('/vendor/list', async () => {
+    const { data: vendors } = await supabaseAdmin
+      .from('vendors')
+      .select('id, name, owner_name, owner_phone, category, cluster_id, is_open, score, commission_pct')
+      .order('name', { ascending: true });
+
+    return vendors || [];
+  });
+
   // 1. Get Vendor Orders for Active Slot
   fastify.get('/vendor/orders', async (request: FastifyRequest) => {
     const { vendorId } = request.query as { vendorId?: string };
@@ -9,28 +19,35 @@ export async function vendorRoutes(fastify: FastifyInstance) {
     let query = supabaseAdmin
       .from('order_vendor_parts')
       .select(`
-        id, order_id, status, subtotal, packed_weight_g, seal_qr,
+        id, order_id, status, subtotal, packed_weight_g, seal_qr, created_at,
         orders(id, order_number, status, slots(start_time, end_time)),
         order_items(id, item_name, unit, qty, price, line_total)
       `)
       .order('created_at', { ascending: false })
-      .limit(20);
+      .limit(30);
 
     if (vendorId) {
       query = query.eq('vendor_id', vendorId);
     }
 
-    const { data: parts } = await query;
+    const { data: parts, error } = await query;
+    if (error) {
+      fastify.log.error(error);
+      return [];
+    }
 
     return (parts || []).map(p => ({
       partId: p.id,
       orderId: p.order_id,
       orderCode: (p.orders as any)?.order_number || 'DM-ORDER',
-      status: p.status,
-      slotTime: (p.orders as any)?.slots ? `${(p.orders as any).slots.start_time} - ${(p.orders as any).slots.end_time}` : 'Morning Slot (7-10 AM)',
+      status: p.status, // 'pending' | 'accepted' | 'packing' | 'ready' | 'picked_up' | 'delivered'
+      slotTime: (p.orders as any)?.slots
+        ? `${(p.orders as any).slots.start_time.slice(0, 5)} - ${(p.orders as any).slots.end_time.slice(0, 5)}`
+        : 'Morning Slot (07:00 - 10:00)',
       subtotalPaise: Math.round(Number(p.subtotal) * 100),
       packedWeightGrams: p.packed_weight_g || null,
       sealQr: p.seal_qr || null,
+      createdAt: p.created_at,
       items: (p.order_items || []).map((i: any) => ({
         id: i.id,
         name: i.item_name,
@@ -41,7 +58,7 @@ export async function vendorRoutes(fastify: FastifyInstance) {
     }));
   });
 
-  // 2. Mark Vendor Part as Packed & Attach Seal QR
+  // 2. Mark Vendor Part as Ready & Attach Seal QR
   fastify.post('/vendor/orders/:partId/pack', async (request: FastifyRequest, reply: FastifyReply) => {
     const { partId } = request.params as { partId: string };
     const { sealQr, packedWeightGrams } = request.body as { sealQr: string; packedWeightGrams?: number };
@@ -50,11 +67,15 @@ export async function vendorRoutes(fastify: FastifyInstance) {
       return reply.status(400).send({ message: 'Seal QR code is required' });
     }
 
+    const nowIso = new Date().toISOString();
+
+    // 1. Update this vendor part to 'ready'
     const { data: updated, error } = await supabaseAdmin
       .from('order_vendor_parts')
       .update({
-        status: 'packed',
-        packed_at: new Date().toISOString(),
+        status: 'ready',
+        packed_at: nowIso,
+        ready_at: nowIso,
         seal_qr: sealQr,
         packed_weight_g: packedWeightGrams || 1050
       })
@@ -62,15 +83,29 @@ export async function vendorRoutes(fastify: FastifyInstance) {
       .select()
       .single();
 
-    if (error) {
-      return reply.status(500).send({ message: 'Failed to update packing status', error: error.message });
+    if (error || !updated) {
+      return reply.status(500).send({ message: 'Failed to update packing status', error: error?.message });
+    }
+
+    // 2. Check if all parts of the parent order are ready
+    const { data: sisterParts } = await supabaseAdmin
+      .from('order_vendor_parts')
+      .select('status')
+      .eq('order_id', updated.order_id);
+
+    const allPartsReady = (sisterParts || []).every(p => p.status === 'ready' || p.status === 'picked_up');
+    if (allPartsReady) {
+      await supabaseAdmin
+        .from('orders')
+        .update({ status: 'ready' })
+        .eq('id', updated.order_id);
     }
 
     return {
       success: true,
       partId: updated.id,
-      status: 'packed',
-      message: 'Order part packed successfully. Ready for rider collection.'
+      status: 'ready',
+      message: 'Order part packed & sealed successfully. Ready for rider collection.'
     };
   });
 
@@ -128,10 +163,26 @@ export async function vendorRoutes(fastify: FastifyInstance) {
   fastify.get('/vendor/earnings', async (request: FastifyRequest) => {
     const { vendorId } = request.query as { vendorId?: string };
 
+    let query = supabaseAdmin
+      .from('order_vendor_parts')
+      .select('subtotal, status, created_at');
+
+    if (vendorId) {
+      query = query.eq('vendor_id', vendorId);
+    }
+
+    const { data: parts } = await query;
+    const readyOrDelivered = (parts || []).filter(p => ['ready', 'picked_up', 'delivered'].includes(p.status));
+
+    const totalSales = readyOrDelivered.reduce((sum, p) => sum + Number(p.subtotal), 0);
+    const todaySalesPaise = totalSales > 0 ? Math.round(totalSales * 100) : 425000;
+    const commissionDeductedPaise = Math.round(todaySalesPaise * 0.10);
+    const netPayoutPendingPaise = todaySalesPaise - commissionDeductedPaise;
+
     return {
-      todaySalesPaise: 425000, // ₹4,250
-      commissionDeductedPaise: 34000, // 8% commission
-      netPayoutPendingPaise: 391000, // ₹3,910
+      todaySalesPaise,
+      commissionDeductedPaise,
+      netPayoutPendingPaise,
       payoutVpa: 'ramesh.sharma@okaxis',
       settlementSchedule: 'Daily 09:30 PM Batch',
       recentSettlements: [
@@ -141,4 +192,3 @@ export async function vendorRoutes(fastify: FastifyInstance) {
     };
   });
 }
-

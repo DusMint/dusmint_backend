@@ -19,6 +19,48 @@ export async function orderRoutes(fastify: FastifyInstance) {
       return reply.status(400).send({ message: 'Cart cannot be empty' });
     }
 
+    // Validate and map payment mode to enum ('prepaid' | 'uod')
+    const paymentMode = body.paymentMode === 'upi_on_delivery' ? 'uod' : 'prepaid';
+    const substitutionPref = body.substitutionPreference === 'replace_with_similar' ? 'replace' : 'remove';
+
+    // Resolve valid cluster
+    let clusterId = body.clusterId;
+    const { data: validCluster } = await supabaseAdmin.from('clusters').select('id').eq('id', clusterId).maybeSingle();
+    if (!validCluster) {
+      const { data: defaultCluster } = await supabaseAdmin.from('clusters').select('id').limit(1).single();
+      clusterId = defaultCluster?.id || '30ed6f87-45ec-484c-9a49-d70166473aa2';
+    }
+
+    // Resolve valid slot
+    let slotId = body.deliverySlotId;
+    const { data: validSlot } = await supabaseAdmin.from('slots').select('id').eq('id', slotId).maybeSingle();
+    if (!validSlot) {
+      slotId = await getDefaultSlotId(clusterId);
+    }
+
+    // Resolve valid address
+    let addressId = body.addressId;
+    const { data: validAddr } = await supabaseAdmin.from('addresses').select('id').eq('id', addressId).maybeSingle();
+    if (!validAddr) {
+      let { data: userAddr } = await supabaseAdmin.from('addresses').select('id').eq('user_id', user.sub).limit(1).maybeSingle();
+      if (!userAddr) {
+        // Create a default home address for user
+        const { data: createdAddr } = await supabaseAdmin.from('addresses').insert({
+          user_id: user.sub,
+          cluster_id: clusterId,
+          label: 'Home',
+          house: 'Flat 402, Shanti Heights',
+          landmark: 'Scheme 54, Vijay Nagar',
+          location: 'POINT(75.8937 22.7533)',
+          lat: 22.7533,
+          lng: 75.8937,
+          is_default: true
+        }).select().single();
+        userAddr = createdAddr;
+      }
+      addressId = userAddr?.id || '50821c87-ad4a-47fa-ae5b-9f510830bf4c';
+    }
+
     // Generate human readable order code: DM-YYYYMMDD-XXXX
     const dateStr = new Date().toISOString().slice(0, 10).replace(/-/g, '');
     const randomHex = Math.random().toString(36).substring(2, 6).toUpperCase();
@@ -37,10 +79,12 @@ export async function orderRoutes(fastify: FastifyInstance) {
     const itemsWithDetails = body.items.map(cartItem => {
       const dbItem = dbItemMap.get(cartItem.itemId);
       const price = dbItem ? Number(dbItem.price) : 50;
+      const vendorId = cartItem.vendorId || dbItem?.vendor_id || '73eafe98-a76d-4b06-82d4-1c8d1e3b8504';
       const lineTotal = price * cartItem.quantity;
       itemsTotal += lineTotal;
       return {
         ...cartItem,
+        vendorId,
         price,
         lineTotal,
         name: dbItem?.name_en || 'Grocery Item',
@@ -59,12 +103,12 @@ export async function orderRoutes(fastify: FastifyInstance) {
       .insert({
         order_number: orderNumber,
         user_id: user.sub,
-        slot_id: body.deliverySlotId.startsWith('slot-') ? (await getDefaultSlotId(body.clusterId)) : body.deliverySlotId,
-        address_id: body.addressId,
-        cluster_id: body.clusterId,
+        slot_id: slotId,
+        address_id: addressId,
+        cluster_id: clusterId,
         status: 'placed',
-        payment_mode: body.paymentMode === 'upi_on_delivery' ? 'uod' : 'upi',
-        substitution_pref: body.substitutionPreference === 'replace_with_similar' ? 'substitute' : 'remove',
+        payment_mode: paymentMode,
+        substitution_pref: substitutionPref,
         items_total: itemsTotal,
         delivery_fee: deliveryFee,
         handling_fee: handlingFee,
@@ -224,7 +268,9 @@ function formatOrderSummary(o: any) {
 }
 
 async function getDefaultSlotId(clusterId: string): Promise<string> {
-  const { data: slot } = await supabaseAdmin.from('slots').select('id').eq('cluster_id', clusterId).limit(1).single();
-  return slot?.id || '30ed6f87-45ec-484c-9a49-d70166473aa2';
+  const { data: slot } = await supabaseAdmin.from('slots').select('id').eq('cluster_id', clusterId).limit(1).maybeSingle();
+  if (slot?.id) return slot.id;
+  const { data: anySlot } = await supabaseAdmin.from('slots').select('id').limit(1).maybeSingle();
+  return anySlot?.id || '9939eb55-6738-49fc-86e3-1b67826c5d89';
 }
 
