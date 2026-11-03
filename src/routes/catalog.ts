@@ -32,22 +32,30 @@ export async function catalogRoutes(fastify: FastifyInstance) {
   fastify.get('/items', async (request: FastifyRequest) => {
     const { categoryId } = request.query as { categoryId?: string };
 
-    let query = supabaseAdmin.from('items').select('*').eq('in_stock', true);
+    let query = supabaseAdmin
+      .from('items')
+      .select('*, categories(slug, name_en), vendors(name, category)')
+      .eq('in_stock', true);
+
     if (categoryId) {
       query = query.eq('category_id', categoryId);
     }
 
-    const { data: items } = await query.limit(50);
+    const { data: items } = await query.limit(60);
 
     return (items || []).map(i => ({
       id: i.id,
       vendorId: i.vendor_id,
+      vendorName: (i.vendors as any)?.name || 'Local Store',
       categoryId: i.category_id,
+      categorySlug: (i.categories as any)?.slug || 'vegetables',
+      categoryName: (i.categories as any)?.name_en || 'Vegetables',
       nameEn: i.name_en,
       nameHi: i.name_hi,
       unit: i.unit,
       stepQuantity: 1,
       pricePaise: Math.round(Number(i.price) * 100),
+      mrpPaise: i.mrp ? Math.round(Number(i.mrp) * 100) : undefined,
       mandiBandMinPaise: i.band_min ? Math.round(Number(i.band_min) * 100) : undefined,
       mandiBandMaxPaise: i.band_max ? Math.round(Number(i.band_max) * 100) : undefined,
       photoUrl: i.photo_url || undefined,
