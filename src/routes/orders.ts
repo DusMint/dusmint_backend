@@ -242,12 +242,26 @@ function formatOrderSummary(o: any) {
   const parts = o.order_vendor_parts || [];
   const itemCount = parts.reduce((count: number, p: any) => count + (p.order_items?.length || 0), 0);
 
+  const items: any[] = [];
+  for (const p of parts) {
+    for (const item of (p.order_items || [])) {
+      items.push({
+        id: item.id || item.item_id,
+        name: item.item_name || 'Grocery Item',
+        price: Math.round(Number(item.price || 0)),
+        quantity: Number(item.qty || 1),
+        quantityLabel: item.unit || '1 pc',
+        imageUrl: undefined,
+      });
+    }
+  }
+
   return {
     id: o.id,
     orderCode: o.order_number,
     status: o.status || 'placed',
-    slotName: o.slots ? `${o.slots.start_time} - ${o.slots.end_time}` : 'Morning Slot (7-10 AM)',
-    itemCount: itemCount || 1,
+    slotName: o.slots ? `${o.slots.start_time} - ${o.slots.end_time}` : 'Instant 9 Mins',
+    itemCount: itemCount || items.length || 1,
     totalPaise: Math.round(Number(o.total) * 100),
     deliveryFeePaise: Math.round(Number(o.delivery_fee) * 100),
     paymentMode: o.payment_mode === 'uod' ? 'UPI on Delivery' : 'Online UPI',
@@ -257,6 +271,7 @@ function formatOrderSummary(o: any) {
       ? new Date(new Date(o.delivered_at).getTime() + 30 * 60 * 1000).toISOString()
       : undefined,
     createdAt: o.created_at,
+    items,
     vendorParts: parts.map((p: any) => ({
       vendorName: p.vendors?.name || 'Local Store',
       shopCategory: p.vendors?.category || 'Groceries',
