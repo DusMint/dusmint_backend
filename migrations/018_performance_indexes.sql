@@ -50,3 +50,4 @@ CREATE INDEX IF NOT EXISTS idx_addresses_user_default
 
 CREATE INDEX IF NOT EXISTS idx_slots_cluster_active 
     ON slots (cluster_id, is_active);
+

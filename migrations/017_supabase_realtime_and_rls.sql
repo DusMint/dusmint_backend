@@ -83,3 +83,4 @@ GRANT EXECUTE ON FUNCTION get_order_details_json TO authenticated, anon;
 GRANT EXECUTE ON FUNCTION verify_order_seal TO authenticated, anon;
 GRANT EXECUTE ON FUNCTION cancel_customer_order TO authenticated, anon;
 GRANT EXECUTE ON FUNCTION update_rider_live_location TO authenticated, anon;
+

@@ -280,3 +280,4 @@ END;
 $$;
 
 COMMENT ON FUNCTION place_order_atomic IS 'Atomically creates a multi-vendor customer order, splits into vendor parts, adds line items, and creates delivery tracking task.';
+
