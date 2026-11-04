@@ -135,6 +135,45 @@ export async function authRoutes(fastify: FastifyInstance) {
     };
   });
 
+  // 3.5 Update User Profile
+  fastify.patch('/user/profile', { preHandler: [fastify.authenticate] }, async (request: FastifyRequest, reply: FastifyReply) => {
+    const user = (request as any).user;
+    const body = request.body as {
+      fullName?: string;
+      preferredLanguage?: string;
+      isVegOnly?: boolean;
+      avatarUrl?: string;
+    };
+
+    const updates: any = {};
+    if (body.fullName !== undefined) updates.name = body.fullName;
+    if (body.preferredLanguage !== undefined) updates.language = body.preferredLanguage;
+    if (body.isVegOnly !== undefined) updates.veg_only = body.isVegOnly;
+    if (body.avatarUrl !== undefined) updates.avatar_url = body.avatarUrl;
+
+    const { data: updated, error } = await supabaseAdmin
+      .from('profiles')
+      .update(updates)
+      .eq('id', user.sub)
+      .select()
+      .single();
+
+    if (error || !updated) {
+      return reply.status(500).send({ message: 'Failed to update profile', error: error?.message });
+    }
+
+    return {
+      id: updated.id,
+      phone: updated.phone,
+      fullName: updated.name,
+      preferredLanguage: updated.language,
+      trustTier: updated.trust_tier,
+      isVegOnly: updated.veg_only,
+      avatarUrl: updated.avatar_url,
+      createdAt: updated.created_at
+    };
+  });
+
   // 4. Get User Saved Addresses
   fastify.get('/user/addresses', { preHandler: [fastify.authenticate] }, async (request: FastifyRequest) => {
     const user = (request as any).user;
