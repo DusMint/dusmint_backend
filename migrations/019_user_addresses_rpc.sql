@@ -146,3 +146,4 @@ $$;
 GRANT EXECUTE ON FUNCTION get_user_addresses(UUID) TO authenticated, anon;
 GRANT EXECUTE ON FUNCTION save_user_address(UUID, TEXT, TEXT, TEXT, TEXT, TEXT, DOUBLE PRECISION, DOUBLE PRECISION, BOOLEAN, UUID) TO authenticated, anon;
 GRANT EXECUTE ON FUNCTION delete_user_address(UUID, UUID) TO authenticated, anon;
+
