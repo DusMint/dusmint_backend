@@ -260,5 +260,147 @@ export async function authRoutes(fastify: FastifyInstance) {
 
     return { success: true };
   });
+
+  // 7. Get User Wishlist Items
+  fastify.get('/user/wishlist', { preHandler: [fastify.authenticate] }, async (request: FastifyRequest) => {
+    const user = (request as any).user;
+    const { data: profile } = await supabaseAdmin
+      .from('profiles')
+      .select('device_id')
+      .eq('id', user.sub)
+      .single();
+
+    if (!profile || !profile.device_id) {
+      return [];
+    }
+
+    try {
+      let itemIds: string[] = [];
+      if (profile.device_id.startsWith('[')) {
+        itemIds = JSON.parse(profile.device_id);
+      } else if (profile.device_id.startsWith('wishlist:')) {
+        itemIds = JSON.parse(profile.device_id.replace('wishlist:', ''));
+      }
+
+      if (!Array.isArray(itemIds) || itemIds.length === 0) {
+        return [];
+      }
+
+      const { data: items } = await supabaseAdmin
+        .from('items')
+        .select('*, vendors(name), categories(name_en, slug)')
+        .in('id', itemIds);
+
+      return (items || []).map((i) => ({
+        id: i.id,
+        vendorId: i.vendor_id,
+        vendorName: (i.vendors as any)?.name || 'Mandi Superstore',
+        categoryId: i.category_id,
+        categorySlug: (i.categories as any)?.slug || 'vegetables',
+        categoryName: (i.categories as any)?.name_en || 'Vegetables',
+        nameEn: i.name_en,
+        nameHi: i.name_hi,
+        unit: i.unit,
+        stepQuantity: 1,
+        pricePaise: Math.round(Number(i.price) * 100),
+        mrpPaise: i.mrp ? Math.round(Number(i.mrp) * 100) : undefined,
+        photoUrl: i.photo_url || undefined,
+        isInStock: i.in_stock,
+        deliveryMins: '9 MINS',
+        rating: 4.8,
+        discountPercent: i.mrp && Number(i.mrp) > Number(i.price)
+          ? Math.round(((Number(i.mrp) - Number(i.price)) / Number(i.mrp)) * 100)
+          : 0,
+      }));
+    } catch {
+      return [];
+    }
+  });
+
+  // 8. Add Item to User Wishlist
+  fastify.post('/user/wishlist', { preHandler: [fastify.authenticate] }, async (request: FastifyRequest, reply: FastifyReply) => {
+    const user = (request as any).user;
+    const body = request.body as { itemId?: string };
+
+    if (!body || !body.itemId) {
+      return reply.status(400).send({ message: 'itemId is required' });
+    }
+
+    const { data: profile } = await supabaseAdmin
+      .from('profiles')
+      .select('device_id')
+      .eq('id', user.sub)
+      .single();
+
+    let itemIds: string[] = [];
+    if (profile && profile.device_id) {
+      try {
+        if (profile.device_id.startsWith('[')) {
+          itemIds = JSON.parse(profile.device_id);
+        } else if (profile.device_id.startsWith('wishlist:')) {
+          itemIds = JSON.parse(profile.device_id.replace('wishlist:', ''));
+        }
+      } catch {
+        itemIds = [];
+      }
+    }
+
+    if (!itemIds.includes(body.itemId)) {
+      itemIds.unshift(body.itemId);
+    }
+
+    await supabaseAdmin
+      .from('profiles')
+      .update({ device_id: `wishlist:${JSON.stringify(itemIds)}` })
+      .eq('id', user.sub);
+
+    return { success: true, itemIds };
+  });
+
+  // 9. Remove Item from User Wishlist
+  fastify.delete('/user/wishlist/:id', { preHandler: [fastify.authenticate] }, async (request: FastifyRequest) => {
+    const user = (request as any).user;
+    const { id } = request.params as { id: string };
+
+    const { data: profile } = await supabaseAdmin
+      .from('profiles')
+      .select('device_id')
+      .eq('id', user.sub)
+      .single();
+
+    let itemIds: string[] = [];
+    if (profile && profile.device_id) {
+      try {
+        if (profile.device_id.startsWith('[')) {
+          itemIds = JSON.parse(profile.device_id);
+        } else if (profile.device_id.startsWith('wishlist:')) {
+          itemIds = JSON.parse(profile.device_id.replace('wishlist:', ''));
+        }
+      } catch {
+        itemIds = [];
+      }
+    }
+
+    itemIds = itemIds.filter((itemId) => itemId !== id);
+
+    await supabaseAdmin
+      .from('profiles')
+      .update({ device_id: `wishlist:${JSON.stringify(itemIds)}` })
+      .eq('id', user.sub);
+
+    return { success: true, itemIds };
+  });
+
+  // 10. Clear User Wishlist
+  fastify.delete('/user/wishlist', { preHandler: [fastify.authenticate] }, async (request: FastifyRequest) => {
+    const user = (request as any).user;
+
+    await supabaseAdmin
+      .from('profiles')
+      .update({ device_id: null })
+      .eq('id', user.sub);
+
+    return { success: true };
+  });
 }
 
