@@ -203,5 +203,23 @@ export async function authRoutes(fastify: FastifyInstance) {
       isDefault: newAddr.is_default
     };
   });
+
+  // 6. Delete Address
+  fastify.delete('/user/addresses/:id', { preHandler: [fastify.authenticate] }, async (request: FastifyRequest, reply: FastifyReply) => {
+    const user = (request as any).user;
+    const { id } = request.params as { id: string };
+
+    const { error } = await supabaseAdmin
+      .from('addresses')
+      .delete()
+      .eq('id', id)
+      .eq('user_id', user.sub);
+
+    if (error) {
+      return reply.status(500).send({ message: 'Failed to delete address', error: error.message });
+    }
+
+    return { success: true };
+  });
 }
 

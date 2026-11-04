@@ -26,6 +26,7 @@ Run each file in the Supabase SQL Editor in the exact numeric order below:
 | **16** | `016_order_lifecycle_and_seals.sql` | Seal scan verification (`verify_order_seal`), cancellation, and live GPS rider tracking | `007`, `011` |
 | **17** | `017_supabase_realtime_and_rls.sql` | Supabase Realtime publication & granular Row-Level Security (RLS) policies | `007`, `011`, `014` |
 | **18** | `018_performance_indexes.sql` | Sub-millisecond composite B-Tree indexes for orders, items, and tracking | `002-011` |
+| **19** | `019_user_addresses_rpc.sql` | Serverless Customer Address CRUD RPCs (`get_user_addresses`, `save_user_address`) | `002`, `003` |
 
 ## How to Run in Supabase
 
@@ -33,5 +34,5 @@ Run each file in the Supabase SQL Editor in the exact numeric order below:
 2. Click on the **SQL Editor** tab (left sidebar).
 3. Create a new query.
 4. Copy and paste the contents of `001_extensions.sql` and click **Run**.
-5. Repeat for each file sequentially from `002` to `018`.
+5. Repeat for each file sequentially from `002` to `019`.
 6. Verify under **Database -> Tables** and **Database -> Functions** that all tables, enums, and RPC functions are created properly.
