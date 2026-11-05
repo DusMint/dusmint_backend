@@ -1,5 +1,6 @@
 import { createClient, SupabaseClient } from '@supabase/supabase-js';
 import * as dotenv from 'dotenv';
+import WebSocket from 'ws';
 
 dotenv.config();
 
@@ -23,8 +24,8 @@ export const supabaseAdmin: SupabaseClient = createClient(
       autoRefreshToken: false,
       persistSession: false,
     },
-    ...(typeof globalThis.WebSocket !== 'undefined'
-      ? { realtime: { transport: globalThis.WebSocket as any } }
-      : {}),
+    realtime: {
+      transport: WebSocket as any,
+    },
   }
 );
