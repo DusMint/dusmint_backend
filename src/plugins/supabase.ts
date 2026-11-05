@@ -1,13 +1,7 @@
 import { createClient, SupabaseClient } from '@supabase/supabase-js';
 import * as dotenv from 'dotenv';
-import WebSocket from 'ws';
 
 dotenv.config();
-
-// Ensure WebSocket is available on Node.js runtime for Supabase Realtime
-if (typeof globalThis.WebSocket === 'undefined') {
-  (globalThis as any).WebSocket = WebSocket;
-}
 
 const supabaseUrl = process.env.SUPABASE_URL || '';
 const supabaseServiceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY || '';
@@ -29,8 +23,8 @@ export const supabaseAdmin: SupabaseClient = createClient(
       autoRefreshToken: false,
       persistSession: false,
     },
-    realtime: {
-      transport: WebSocket as any,
-    },
+    ...(typeof globalThis.WebSocket !== 'undefined'
+      ? { realtime: { transport: globalThis.WebSocket as any } }
+      : {}),
   }
 );
